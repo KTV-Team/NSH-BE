@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts, NotoSans_400Regular, NotoSans_500Medium, NotoSans_600SemiBold } from '@expo-google-fonts/noto-sans';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { LoadingScreen } from '@/components/common/loading-screen';
 import { ToastProvider } from '@/components/common/toast-provider';
 import { AuthProvider, useAuth } from '@/features/auth/auth-provider';
@@ -49,13 +50,15 @@ export default function RootLayout() {
   if (!loaded && !error) return null;
   return (
     <SafeAreaProvider>
-      <ToastProvider>
-        <AuthProvider>
-          <NotificationRuntimeProvider>
-            <RootNavigator />
-          </NotificationRuntimeProvider>
-        </AuthProvider>
-      </ToastProvider>
+      <KeyboardProvider>
+        <ToastProvider>
+          <AuthProvider>
+            <NotificationRuntimeProvider>
+              <RootNavigator />
+            </NotificationRuntimeProvider>
+          </AuthProvider>
+        </ToastProvider>
+      </KeyboardProvider>
     </SafeAreaProvider>
   );
 }

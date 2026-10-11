@@ -7,6 +7,7 @@ export type NotificationFormField =
   | 'body'
   | 'scheduledDate'
   | 'scheduledTime'
+  | 'scheduledDelay'
   | 'recurrenceStartsOn'
   | 'recurrenceEndsOn'
   | 'recurrenceLocalTime'
@@ -20,6 +21,9 @@ export interface CreateNotificationFormValues {
   deliveryMode: 'immediate' | 'scheduled' | 'recurring';
   scheduledDate: string;
   scheduledTime: string;
+  scheduledMode?: 'absolute' | 'relative';
+  scheduledDelay?: string;
+  scheduledDelayUnit?: 'minutes' | 'hours' | 'days';
   recurrenceFrequency: 'daily' | 'weekly';
   recurrenceStartsOn: string;
   recurrenceEndsOn: string;
@@ -65,7 +69,9 @@ function parseScheduledDateTime(dateText: string, timeText: string): Date | null
   if (
     value.getFullYear() !== year ||
     value.getMonth() !== month - 1 ||
-    value.getDate() !== day
+    value.getDate() !== day ||
+    value.getHours() !== hour ||
+    value.getMinutes() !== minute
   ) {
     return null;
   }
@@ -82,14 +88,32 @@ export function buildCreateNotificationRequest(
   let delivery: Delivery = { mode: 'immediate' };
 
   if (values.deliveryMode === 'scheduled') {
-    const scheduledAt = parseScheduledDateTime(values.scheduledDate, values.scheduledTime);
-    if (!scheduledAt) {
-      errors.scheduledDate = 'Nhập ngày và giờ hợp lệ.';
-      errors.scheduledTime = 'Nhập ngày và giờ hợp lệ.';
-    } else if (scheduledAt <= now) {
-      errors.scheduledDate = 'Thời điểm gửi phải ở trong tương lai.';
+    if (values.scheduledMode === 'relative') {
+      const rawDelay = values.scheduledDelay?.trim() ?? '';
+      const delay = /^\d+$/.test(rawDelay) ? Number(rawDelay) : NaN;
+      const unit = values.scheduledDelayUnit ?? 'minutes';
+      const multiplier = unit === 'days' ? 24 * 60 * 60_000 : unit === 'hours' ? 60 * 60_000 : 60_000;
+      const scheduledAtMs = now.getTime() + delay * multiplier;
+      if (!Number.isSafeInteger(delay) || delay <= 0 || !Number.isSafeInteger(scheduledAtMs)) {
+        errors.scheduledDelay = 'Nhập số phút, giờ hoặc ngày nguyên dương hợp lệ.';
+      } else {
+        const scheduledAt = new Date(scheduledAtMs);
+        if (scheduledAt.getTime() !== scheduledAtMs) {
+          errors.scheduledDelay = 'Thời điểm gửi vượt quá giới hạn cho phép.';
+        } else {
+          delivery = { mode: 'scheduled', scheduledAt: scheduledAt.toISOString() };
+        }
+      }
     } else {
-      delivery = { mode: 'scheduled', scheduledAt: scheduledAt.toISOString() };
+      const scheduledAt = parseScheduledDateTime(values.scheduledDate, values.scheduledTime);
+      if (!scheduledAt) {
+        errors.scheduledDate = 'Nhập ngày và giờ hợp lệ.';
+        errors.scheduledTime = 'Nhập ngày và giờ hợp lệ.';
+      } else if (scheduledAt <= now) {
+        errors.scheduledDate = 'Thời điểm gửi phải ở trong tương lai.';
+      } else {
+        delivery = { mode: 'scheduled', scheduledAt: scheduledAt.toISOString() };
+      }
     }
   }
 
@@ -147,7 +171,9 @@ export function buildCreateNotificationRequest(
       } else if (field === 'recipientId' || field === 'title' || field === 'body') {
         errors[field] = issue.message;
       } else if (field === 'delivery') {
-        errors[values.deliveryMode === 'scheduled' ? 'scheduledDate' : 'recurrenceLocalTime'] = issue.message;
+        errors[values.deliveryMode === 'scheduled'
+          ? values.scheduledMode === 'relative' ? 'scheduledDelay' : 'scheduledDate'
+          : 'recurrenceLocalTime'] = issue.message;
       }
     }
     return { payload: null, errors };

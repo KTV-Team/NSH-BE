@@ -1,8 +1,9 @@
 import type { PropsWithChildren } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/app-text';
+import { AppKeyboardAwareScrollView } from '@/components/app-keyboard-aware-scroll-view';
 import { Icon } from '@/components/icon';
 import { styles } from './auth-scaffold.styles';
 
@@ -42,25 +43,16 @@ export function AuthScaffold({
           </View>
           <View style={styles.balance} />
         </View>
-        <KeyboardAvoidingView
-          style={styles.fill}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
-            contentContainerStyle={styles.content}
-          >
-            <View style={styles.titles}>
-              <AppText variant="heading-3" accessibilityRole="header">
-                {title}
-              </AppText>
-              <AppText style={styles.description}>{description}</AppText>
-            </View>
-            {children}
-            {footer && <View style={styles.footer}>{footer}</View>}
-          </ScrollView>
-        </KeyboardAvoidingView>
+        <AppKeyboardAwareScrollView style={styles.fill} contentContainerStyle={styles.content}>
+          <View style={styles.titles}>
+            <AppText variant="heading-3" accessibilityRole="header">
+              {title}
+            </AppText>
+            <AppText style={styles.description}>{description}</AppText>
+          </View>
+          {children}
+          {footer && <View style={styles.footer}>{footer}</View>}
+        </AppKeyboardAwareScrollView>
       </View>
     </SafeAreaView>
   );

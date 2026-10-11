@@ -31,7 +31,7 @@ function initials(name: string): string {
 export default function InboxScreen() {
   const { api, session, clearExpiredSession } = useAuth();
   const sessionUserId = session?.user.id;
-  const { revision, permissionStatus, registrationError, requestPermission, openSystemSettings, lastEvent } = useNotificationRuntime();
+  const { revision, permissionStatus, remotePushAvailable, registrationError, requestPermission, openSystemSettings, lastEvent } = useNotificationRuntime();
   const [items, setItems] = useState<InboxItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [page, setPage] = useState(1);
@@ -236,7 +236,7 @@ export default function InboxScreen() {
   };
 
   const initialsForUser = initials(session?.user.name ?? 'N');
-  const canRequestPermission = Platform.OS !== 'web' && permissionStatus !== 'granted' && permissionStatus !== 'provisional';
+  const canRequestPermission = remotePushAvailable && Platform.OS !== 'web' && permissionStatus !== 'granted' && permissionStatus !== 'provisional';
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'right', 'bottom', 'left']}>

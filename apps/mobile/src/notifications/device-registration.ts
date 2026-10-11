@@ -19,6 +19,22 @@ function currentPlatform(): PushPlatform | null {
   return Platform.OS === 'android' || Platform.OS === 'ios' ? Platform.OS : null;
 }
 
+export function isExpoGo(): boolean {
+  // StoreClient also includes development builds, so use app ownership to distinguish Expo Go.
+  return Constants.appOwnership === 'expo';
+}
+
+export function remotePushIsAvailable(): boolean {
+  return currentPlatform() !== null && !isExpoGo();
+}
+
+export function addDevicePushTokenListener(
+  listener: Parameters<typeof Notifications.addPushTokenListener>[0],
+): Notifications.Subscription | null {
+  if (!remotePushIsAvailable()) return null;
+  return Notifications.addPushTokenListener(listener);
+}
+
 function permissionStatus(status: Notifications.NotificationPermissionsStatus): PushPermissionStatus {
   if (Platform.OS === 'ios' && status.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL) return 'provisional';
   if (status.granted) return 'granted';
@@ -57,6 +73,13 @@ export async function registerDevice(
 ): Promise<DeviceRegistrationState> {
   const platform = currentPlatform();
   if (!platform) return { permissionStatus: 'undetermined', registered: false, error: null };
+  if (!remotePushIsAvailable()) {
+    return {
+      permissionStatus: 'undetermined',
+      registered: false,
+      error: 'Expo Go không hỗ trợ push từ xa. Hãy cài development build để kiểm thử push.',
+    };
+  }
 
   let permission = await Notifications.getPermissionsAsync();
   if (requestPermission && !permission.granted && permission.ios?.status !== Notifications.IosAuthorizationStatus.PROVISIONAL) {

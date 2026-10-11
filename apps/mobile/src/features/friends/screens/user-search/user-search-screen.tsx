@@ -1,10 +1,11 @@
 import { useCallback, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { Alert, Pressable, TextInput, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '@nexa/design-tokens';
 import type { SearchUserSummary } from '@nexa/types';
 import { AppText } from '@/components/app-text';
+import { AppKeyboardAwareScrollView } from '@/components/app-keyboard-aware-scroll-view';
 import { ErrorNotice } from '@/components/error-notice';
 import { Icon } from '@/components/icon';
 import { AppBottomNavigation } from '@/components/app-bottom-navigation';
@@ -117,7 +118,7 @@ export default function UserSearchScreen() {
         <Icon name="info" size={19} color={colors.steel} />
       </Pressable>
     </View>
-    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <AppKeyboardAwareScrollView contentContainerStyle={styles.content}>
       <View style={styles.titleGroup}>
         <AppText variant="heading-3" style={styles.title}>Kết nối bạn bè</AppText>
         <AppText variant="body-sm" style={styles.subtitle}>Tìm tài khoản để gửi lời mời kết bạn.</AppText>
@@ -169,7 +170,7 @@ export default function UserSearchScreen() {
         </View>
         <Icon name="chevron-right" size={19} color={colors.steel} />
       </Pressable>
-    </ScrollView>
+    </AppKeyboardAwareScrollView>
     <AppBottomNavigation active="friends" />
   </SafeAreaView>;
 }

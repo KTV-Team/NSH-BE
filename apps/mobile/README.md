@@ -41,7 +41,9 @@ pnpm --filter @nexa/mobile android
 pnpm --filter @nexa/mobile ios
 ```
 
-Expo Go cần phiên bản hỗ trợ SDK của dự án. Khi thêm native module hoặc đổi config plugin, rebuild development/native app tương ứng. Xem [hướng dẫn backend và PostgreSQL](../../README.md#local-development) trước khi chạy app.
+SDK 53 trở lên, Expo Go không hỗ trợ push từ xa trên Android. NEXA bỏ qua đăng ký push khi chạy trong Expo Go; để kiểm thử push, cài development build bằng `pnpm --filter @nexa/mobile android` (iOS cần macOS/Xcode với lệnh tương ứng), rồi chạy `pnpm dev:app`. Script `dev` khởi động Metro ở chế độ development client.
+
+Expo Go cần phiên bản hỗ trợ SDK của dự án. Bộ chọn ngày giờ và quản lý bàn phím dùng native modules; sau khi thêm hoặc đổi phiên bản, rebuild development/native app tương ứng. Xem [hướng dẫn backend và PostgreSQL](../../README.md#local-development) trước khi chạy app.
 
 ## Địa chỉ API
 

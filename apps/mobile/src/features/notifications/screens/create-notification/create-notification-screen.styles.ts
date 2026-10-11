@@ -171,6 +171,7 @@ export const styles = StyleSheet.create({
     color: colors.ink,
     backgroundColor: colors.canvas,
   },
+  clearDateAction: { color: colors.slate, textDecorationLine: 'underline' },
   infoPanel: {
     flexDirection: 'row',
     alignItems: 'flex-start',

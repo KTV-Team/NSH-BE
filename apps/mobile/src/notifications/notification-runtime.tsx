@@ -15,7 +15,7 @@ import { router } from 'expo-router';
 import type { InboxEventKind, InboxRealtimeEvent, PushPermissionStatus } from '@nexa/types';
 import { apiUrl } from '@/config/env';
 import { useAuth } from '@/features/auth/auth-provider';
-import { registerDevice } from './device-registration';
+import { addDevicePushTokenListener, registerDevice, remotePushIsAvailable } from './device-registration';
 
 const pendingTapKey = 'nexa.push.pending-item-id';
 const itemIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -24,6 +24,7 @@ const eventKinds = new Set<InboxEventKind>(['created', 'updated', 'deleted', 're
 interface NotificationRuntimeValue {
   revision: number;
   permissionStatus: PushPermissionStatus;
+  remotePushAvailable: boolean;
   registrationError: string | null;
   pendingTapItemId: string | null;
   lastEvent: InboxRealtimeEvent | null;
@@ -75,6 +76,7 @@ export function NotificationRuntimeProvider({ children }: PropsWithChildren) {
   const { api, session, loading, getAccessToken } = useAuth();
   const sessionUserId = session?.user.id;
   const isNative = Platform.OS === 'android' || Platform.OS === 'ios';
+  const remotePushAvailable = remotePushIsAvailable();
   const [revision, setRevision] = useState(0);
   const [permissionStatus, setPermissionStatus] = useState<PushPermissionStatus>('undetermined');
   const [registrationError, setRegistrationError] = useState<string | null>(null);
@@ -243,18 +245,27 @@ export function NotificationRuntimeProvider({ children }: PropsWithChildren) {
     };
 
     void Promise.resolve().then(() => refreshDeviceRegistration());
-    const pushTokenSubscription = Notifications.addPushTokenListener(() => {
-      void refreshDeviceRegistration();
-    });
+    let pushTokenSubscription: Notifications.Subscription | null = null;
+    if (remotePushAvailable) {
+      try {
+        pushTokenSubscription = addDevicePushTokenListener(() => {
+          void refreshDeviceRegistration();
+        });
+      } catch {
+        void Promise.resolve().then(() => {
+          if (active) setRegistrationError('Chưa thể theo dõi thay đổi push token. Hãy thử khởi động lại ứng dụng.');
+        });
+      }
+    }
     if (AppState.currentState === 'active') void connect();
     const appStateSubscription = AppState.addEventListener('change', onAppState);
     return () => {
       active = false;
       appStateSubscription.remove();
-      pushTokenSubscription.remove();
+      pushTokenSubscription?.remove();
       disconnect();
     };
-  }, [sessionUserId, isNative, getAccessToken, noteInboxChange, refreshDeviceRegistration]);
+  }, [sessionUserId, isNative, remotePushAvailable, getAccessToken, noteInboxChange, refreshDeviceRegistration]);
 
   useEffect(() => {
     if (loading || !sessionUserId || !pendingTapItemId) return;
@@ -270,13 +281,14 @@ export function NotificationRuntimeProvider({ children }: PropsWithChildren) {
   const value = useMemo(() => ({
     revision,
     permissionStatus: visiblePermissionStatus,
+    remotePushAvailable,
     registrationError: visibleRegistrationError,
     pendingTapItemId,
     lastEvent,
     requestPermission,
     openSystemSettings,
     clearPendingTap,
-  }), [revision, visiblePermissionStatus, visibleRegistrationError, pendingTapItemId, lastEvent, requestPermission, openSystemSettings, clearPendingTap]);
+  }), [revision, visiblePermissionStatus, remotePushAvailable, visibleRegistrationError, pendingTapItemId, lastEvent, requestPermission, openSystemSettings, clearPendingTap]);
 
   return <NotificationRuntimeContext.Provider value={value}>{children}</NotificationRuntimeContext.Provider>;
 }

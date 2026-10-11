@@ -21,9 +21,21 @@
       "bundler": "metro",
       "output": "static"
     },
-    "plugins": ["expo-router", "expo-secure-store", "expo-font", "expo-notifications"],
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-font",
+      "expo-notifications"
+    ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "f9eef7bd-8cee-4559-afc2-a42348f6f980"
+      },
+      "router": {}
+    },
+    "owner": "grezhuls-team"
   }
 }

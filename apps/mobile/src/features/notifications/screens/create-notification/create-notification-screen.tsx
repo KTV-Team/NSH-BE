@@ -1,22 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
-  ScrollView,
   TextInput,
   View,
 } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import type { Friendship, PersonalNotification, UserSummary } from '@nexa/types';
+import type { CreateNotificationDto, Friendship, PersonalNotification, UserSummary } from '@nexa/types';
 import { ApiClientError } from '@nexa/api-client';
 import { colors } from '@nexa/design-tokens';
 import { AppText } from '@/components/app-text';
+import { AppKeyboardAwareScrollView } from '@/components/app-keyboard-aware-scroll-view';
 import { Icon, type IconName } from '@/components/icon';
 import { PrimaryButton } from '@/components/primary-button';
 import { useAuth } from '@/features/auth/auth-provider';
+import { NotificationDateTimePicker } from './notification-date-time-picker';
 import {
   buildCreateNotificationRequest,
   localCalendarDate,
@@ -61,12 +60,53 @@ function emptyForm(now = new Date()): CreateNotificationFormValues {
     deliveryMode: 'immediate',
     scheduledDate: '',
     scheduledTime: '',
+    scheduledMode: 'absolute',
+    scheduledDelay: '',
+    scheduledDelayUnit: 'minutes',
     recurrenceFrequency: 'daily',
     recurrenceStartsOn: localCalendarDate(now),
     recurrenceEndsOn: '',
     recurrenceLocalTime: '09:00',
     recurrenceWeekdays: [],
   };
+}
+
+function pickerDate(value: string, format: 'display' | 'calendar'): Date | undefined {
+  if (!value) return undefined;
+  const match = format === 'display'
+    ? /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value)
+    : /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return undefined;
+  const day = Number(format === 'display' ? match[1] : match[3]);
+  const month = Number(match[2]);
+  const year = Number(format === 'display' ? match[3] : match[1]);
+  const date = new Date(0);
+  date.setFullYear(year, month - 1, day);
+  date.setHours(12, 0, 0, 0);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day
+    ? date
+    : undefined;
+}
+
+function pickerTime(value: string): Date {
+  const result = new Date();
+  const match = /^(\d{2}):(\d{2})$/.exec(value);
+  if (match) result.setHours(Number(match[1]), Number(match[2]), 0, 0);
+  return result;
+}
+
+function formatPickerTime(value: Date): string {
+  return `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`;
+}
+
+function formatScheduledDate(value: Date): string {
+  return `${String(value.getDate()).padStart(2, '0')}/${String(value.getMonth() + 1).padStart(2, '0')}/${value.getFullYear()}`;
+}
+
+function startOfLocalDay(): Date {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return today;
 }
 
 function statusCopy(notification: PersonalNotification): string {
@@ -121,7 +161,7 @@ export default function CreateNotificationScreen() {
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<PersonalNotification | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(false);
-  const requestKey = useRef<{ fingerprint: string; id: string } | null>(null);
+  const requestKey = useRef<{ fingerprint: string; payload: CreateNotificationDto } | null>(null);
   const activeUserId = useRef(session?.user.id);
   activeUserId.current = session?.user.id;
 
@@ -200,18 +240,18 @@ export default function CreateNotificationScreen() {
       ...form,
       recipientId: recipient === 'self' ? owner : friendId,
     };
-    const candidateId = requestKey.current?.id ?? Crypto.randomUUID();
-    const result = buildCreateNotificationRequest(values, candidateId, deviceTimeZone);
-    setFieldErrors(result.errors);
+    const fingerprint = JSON.stringify(values);
+    let payload = requestKey.current?.fingerprint === fingerprint ? requestKey.current.payload : null;
+    if (payload) {
+      setFieldErrors({});
+    } else {
+      const result = buildCreateNotificationRequest(values, Crypto.randomUUID(), deviceTimeZone);
+      setFieldErrors(result.errors);
+      payload = result.payload;
+      if (payload) requestKey.current = { fingerprint, payload };
+    }
     setError(null);
-    if (!result.payload) return;
-
-    const fingerprint = JSON.stringify({ ...result.payload, clientRequestId: '' });
-    const clientRequestId = requestKey.current?.fingerprint === fingerprint
-      ? requestKey.current.id
-      : Crypto.randomUUID();
-    requestKey.current = { fingerprint, id: clientRequestId };
-    const payload = { ...result.payload, clientRequestId };
+    if (!payload) return;
     setSubmitting(true);
     try {
       const notification = await api.notifications.create(payload);
@@ -276,7 +316,7 @@ export default function CreateNotificationScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Quay lại hộp thư"
-          onPress={() => router.back()}
+          onPress={() => router.replace('/')}
           style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}
         >
           <Icon name="back" size={20} />
@@ -285,11 +325,7 @@ export default function CreateNotificationScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      <KeyboardAvoidingView
-        style={styles.keyboardArea}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <AppKeyboardAwareScrollView style={styles.keyboardArea} contentContainerStyle={styles.content}>
           {created ? (
             <View style={styles.statusCard}>
               <View style={styles.statusHeading}>
@@ -451,19 +487,62 @@ export default function CreateNotificationScreen() {
               {form.deliveryMode === 'scheduled' ? (
                 <View style={styles.scheduleCard}>
                   <AppText variant="body-sm-medium">Thời điểm gửi ({deviceTimeZone})</AppText>
-                  <View style={styles.scheduleFields}>
-                    <View style={styles.scheduleField}>
-                      <FieldHint>Ngày gửi</FieldHint>
-                      <TextInput accessibilityLabel="Ngày gửi" placeholder="dd/mm/yyyy" placeholderTextColor={colors.muted} value={form.scheduledDate} onChangeText={(value) => updateForm('scheduledDate', value)} style={styles.scheduleInput} />
-                      {renderFieldError('scheduledDate')}
-                    </View>
-                    <View style={styles.scheduleField}>
-                      <FieldHint>Giờ gửi</FieldHint>
-                      <TextInput accessibilityLabel="Giờ gửi" placeholder="hh:mm" placeholderTextColor={colors.muted} value={form.scheduledTime} onChangeText={(value) => updateForm('scheduledTime', value)} style={styles.scheduleInput} />
-                      {renderFieldError('scheduledTime')}
-                    </View>
+                  <View style={styles.segmentedControl}>
+                    <SegmentButton label="Chọn ngày và giờ" selected={form.scheduledMode !== 'relative'} onPress={() => updateForm('scheduledMode', 'absolute')} />
+                    <SegmentButton label="Gửi sau…" selected={form.scheduledMode === 'relative'} onPress={() => updateForm('scheduledMode', 'relative')} />
                   </View>
-                  <AppText variant="caption" style={styles.helper}>Thời điểm sẽ được đổi sang UTC trước khi gửi đến máy chủ.</AppText>
+                  {form.scheduledMode === 'relative' ? (
+                    <View style={styles.scheduleField}>
+                      <FieldHint>Gửi sau bao lâu</FieldHint>
+                      <TextInput
+                        accessibilityLabel="Thời gian chờ trước khi gửi"
+                        accessibilityHint="Nhập số phút, giờ hoặc ngày nguyên dương."
+                        keyboardType="number-pad"
+                        placeholder="Nhập số lượng"
+                        placeholderTextColor={colors.muted}
+                        value={form.scheduledDelay ?? ''}
+                        onChangeText={(value) => updateForm('scheduledDelay', value)}
+                        style={styles.scheduleInput}
+                        maxLength={9}
+                      />
+                      <View style={styles.segmentedControl}>
+                        <SegmentButton label="Phút" selected={(form.scheduledDelayUnit ?? 'minutes') === 'minutes'} onPress={() => updateForm('scheduledDelayUnit', 'minutes')} />
+                        <SegmentButton label="Giờ" selected={form.scheduledDelayUnit === 'hours'} onPress={() => updateForm('scheduledDelayUnit', 'hours')} />
+                        <SegmentButton label="Ngày" selected={form.scheduledDelayUnit === 'days'} onPress={() => updateForm('scheduledDelayUnit', 'days')} />
+                      </View>
+                      {renderFieldError('scheduledDelay')}
+                      <AppText variant="caption" style={styles.helper}>Một ngày được tính là 24 giờ.</AppText>
+                    </View>
+                  ) : (
+                    <>
+                      <View style={styles.scheduleFields}>
+                        <View style={styles.scheduleField}>
+                          <FieldHint>Ngày gửi</FieldHint>
+                          <NotificationDateTimePicker
+                            accessibilityLabel="Ngày gửi"
+                            label="Ngày gửi"
+                            mode="date"
+                            value={pickerDate(form.scheduledDate, 'display')}
+                            minimumDate={startOfLocalDay()}
+                            onChange={(value) => { if (value) updateForm('scheduledDate', formatScheduledDate(value)); }}
+                          />
+                          {renderFieldError('scheduledDate')}
+                        </View>
+                        <View style={styles.scheduleField}>
+                          <FieldHint>Giờ gửi</FieldHint>
+                          <NotificationDateTimePicker
+                            accessibilityLabel="Giờ gửi"
+                            label="Giờ gửi"
+                            mode="time"
+                            value={form.scheduledTime ? pickerTime(form.scheduledTime) : undefined}
+                            onChange={(value) => { if (value) updateForm('scheduledTime', formatPickerTime(value)); }}
+                          />
+                          {renderFieldError('scheduledTime')}
+                        </View>
+                      </View>
+                      <AppText variant="caption" style={styles.helper}>Thời điểm sẽ được đổi sang UTC trước khi gửi đến máy chủ.</AppText>
+                    </>
+                  )}
                 </View>
               ) : null}
 
@@ -499,18 +578,43 @@ export default function CreateNotificationScreen() {
                   <View style={styles.scheduleFields}>
                     <View style={styles.scheduleField}>
                       <FieldHint>Ngày bắt đầu</FieldHint>
-                      <TextInput accessibilityLabel="Ngày bắt đầu lặp lại" placeholder="yyyy-mm-dd" placeholderTextColor={colors.muted} value={form.recurrenceStartsOn} onChangeText={(value) => updateForm('recurrenceStartsOn', value)} style={styles.scheduleInput} />
+                      <NotificationDateTimePicker
+                        accessibilityLabel="Ngày bắt đầu lặp lại"
+                        label="Ngày bắt đầu lặp lại"
+                        mode="date"
+                        value={pickerDate(form.recurrenceStartsOn, 'calendar')}
+                        minimumDate={startOfLocalDay()}
+                        onChange={(value) => { if (value) updateForm('recurrenceStartsOn', localCalendarDate(value)); }}
+                      />
                       {renderFieldError('recurrenceStartsOn')}
                     </View>
                     <View style={styles.scheduleField}>
                       <FieldHint>Ngày kết thúc (tùy chọn)</FieldHint>
-                      <TextInput accessibilityLabel="Ngày kết thúc lặp lại" placeholder="yyyy-mm-dd" placeholderTextColor={colors.muted} value={form.recurrenceEndsOn} onChangeText={(value) => updateForm('recurrenceEndsOn', value)} style={styles.scheduleInput} />
+                      <NotificationDateTimePicker
+                        accessibilityLabel="Ngày kết thúc lặp lại"
+                        label="Ngày kết thúc lặp lại"
+                        mode="date"
+                        value={pickerDate(form.recurrenceEndsOn, 'calendar')}
+                        minimumDate={pickerDate(form.recurrenceStartsOn, 'calendar') ?? startOfLocalDay()}
+                        onChange={(value) => updateForm('recurrenceEndsOn', value ? localCalendarDate(value) : '')}
+                      />
+                      {form.recurrenceEndsOn ? (
+                        <Pressable accessibilityRole="button" accessibilityLabel="Xóa ngày kết thúc lặp lại" onPress={() => updateForm('recurrenceEndsOn', '')}>
+                          <AppText variant="caption" style={styles.clearDateAction}>Xóa ngày kết thúc</AppText>
+                        </Pressable>
+                      ) : null}
                       {renderFieldError('recurrenceEndsOn')}
                     </View>
                   </View>
                   <View style={styles.scheduleField}>
                     <FieldHint>{`Giờ địa phương (${deviceTimeZone})`}</FieldHint>
-                    <TextInput accessibilityLabel="Giờ lặp lại" placeholder="hh:mm" placeholderTextColor={colors.muted} value={form.recurrenceLocalTime} onChangeText={(value) => updateForm('recurrenceLocalTime', value)} style={styles.scheduleInput} />
+                    <NotificationDateTimePicker
+                      accessibilityLabel="Giờ lặp lại"
+                      label="Giờ lặp lại"
+                      mode="time"
+                      value={pickerTime(form.recurrenceLocalTime)}
+                      onChange={(value) => { if (value) updateForm('recurrenceLocalTime', formatPickerTime(value)); }}
+                    />
                     {renderFieldError('recurrenceLocalTime')}
                   </View>
                   {renderFieldError('timeZone')}
@@ -532,8 +636,7 @@ export default function CreateNotificationScreen() {
               </View>
             </>
           )}
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </AppKeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

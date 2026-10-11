@@ -2,7 +2,6 @@ import { useCallback, useRef, useState } from 'react';
 import {
   Alert,
   Pressable,
-  ScrollView,
   TextInput,
   View,
 } from 'react-native';
@@ -12,6 +11,7 @@ import { colors } from '@nexa/design-tokens';
 import { updateUserSchema } from '@nexa/validation';
 import { AppBottomNavigation } from '@/components/app-bottom-navigation';
 import { AppText } from '@/components/app-text';
+import { AppKeyboardAwareScrollView } from '@/components/app-keyboard-aware-scroll-view';
 import { ErrorNotice } from '@/components/error-notice';
 import { Icon } from '@/components/icon';
 import { PrimaryButton } from '@/components/primary-button';
@@ -128,7 +128,7 @@ export default function ProfileSettingsScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <AppKeyboardAwareScrollView contentContainerStyle={styles.content}>
         <View style={styles.profileSummary}>
           <View style={styles.avatar}>
             <AppText variant="body-md-medium" style={styles.avatarText}>{initials}</AppText>
@@ -236,7 +236,7 @@ export default function ProfileSettingsScreen() {
             {signingOut ? 'Đang đăng xuất…' : 'Đăng xuất khỏi thiết bị này'}
           </AppText>
         </Pressable>
-      </ScrollView>
+      </AppKeyboardAwareScrollView>
 
       <AppBottomNavigation active="account" />
     </SafeAreaView>
